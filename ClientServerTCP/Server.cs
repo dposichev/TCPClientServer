@@ -1,5 +1,4 @@
-﻿using ServiceStack.IO;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -11,72 +10,86 @@ namespace ClientServerTCP
 {
     public class Server
     {
-        Socket _listener;
-
-        Socket _connectedClient;
+        TcpListener _listener;
+        TcpClient _client;
 
         public event Action OnClientConnect;
 
         public event Action<byte[]> OnGetMessage;
 
+        private bool _isReadData;
+
         public void InitialServer(int port)
         {
-            // Инициализируем сокет для прослушивания 
-            _listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            // Создаем слушателя порта
+            _listener = new TcpListener(new IPEndPoint(IPAddress.Parse("127.0.0.1"), port));
 
-            
-            _listener.Bind(new IPEndPoint(IPAddress.Parse("127.0.0.1"), port));
-            _listener.Listen(1);
-            
-            while(true)
+            _listener.Start();
+
+            _listener.BeginAcceptTcpClient(new AsyncCallback(AcceptTcpClientCallback), _listener);
+        }
+
+        private void AcceptTcpClientCallback(IAsyncResult ar)
+        {
+            if(_listener.Server == null || !_listener.Server.IsBound)
             {
-                // Ожидаем подулючение клиента
-                _listener.BeginAccept(AcceptCallback, _listener);
+                return;
+            }
+
+            _client = _listener.EndAcceptTcpClient(ar);
+
+            OnClientConnect();
+
+            _listener.BeginAcceptTcpClient(new AsyncCallback(AcceptTcpClientCallback), _listener);
+
+            StarReadData();
+        }
+
+        public void StarReadData()
+        {
+            _isReadData = true;
+
+            while(_isReadData)
+            {
+                if (_client.Client != null)
+                {
+                    if (_client.Connected && _client.Available > 0)
+                    {
+                        ReadData();
+                    }
+                }
             }
         }
 
-        private void AcceptCallback(IAsyncResult asyncResult)
+        public void ReadData()
         {
-            // Завершаем прием подключения клиента
-            Socket acceptedSocket = _listener.EndAccept(asyncResult);
-
-            // Оповещаем о подключении
-            OnClientConnect?.Invoke();
-
-            // Начинаем прием другого клиента
-            //_listener.BeginAccept(AcceptCallback, _listener);
-
             StateObject state = new StateObject();
-            _connectedClient = acceptedSocket;
 
-            state.workSocket = acceptedSocket;
-
-            acceptedSocket.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0, new AsyncCallback(ReadCallback), state);
-        }
-
-        private void ReadCallback(IAsyncResult ar)
-        {
-            StateObject state = (StateObject)ar.AsyncState;
-            Socket handler = state.workSocket;
-
-            int countBytesRead = handler.EndReceive(ar);
-
-            if(countBytesRead>0)
+            if(!_client.Connected)
             {
-                OnGetMessage?.Invoke(state.buffer);
+                return;
+            }
+
+            var read = _client.GetStream()?.ReadAsync(state.buffer, 0, StateObject.BufferSize);
+
+            if (read.Result > 0)
+            {
+                OnGetMessage(state.buffer);
             }
         }
 
-        public void Send(byte[] buffer)
+        public void SendData(byte[] buffer)
         {
-            _connectedClient.BeginSend(buffer, 0, buffer.Length, SocketFlags.None, new AsyncCallback(SendCallback), _connectedClient);
+            _client.GetStream().WriteAsync(buffer, 0, buffer.Length);
         }
 
-        private void SendCallback(IAsyncResult ar)
+        public void ShutdownServer()
         {
-            Socket handler = (Socket)ar.AsyncState;
+            _isReadData = false;
 
-            int bytesSend = handler.EndSend(ar);
+            _listener.Stop();
+            _client.Close();
+            
         }
     }
 }

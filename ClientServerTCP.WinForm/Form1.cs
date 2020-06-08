@@ -12,19 +12,19 @@ namespace ClientServerTCP.WinForm
 {
     public partial class Form1 : Form
     {
-        Server2 _server;
-        Client2 _client2;
+        Server _server;
+        Client _client2;
 
         public Form1()
         {
             InitializeComponent();
 
-            _server = new Server2();
+            _server = new Server();
 
             _server.OnClientConnect += Server_OnClientConnect;
             _server.OnGetMessage += Server_OnGetMessage;
 
-            _client2 = new Client2();
+            _client2 = new Client();
             _client2.OnConnected += _client2_OnConnected;
             _client2.OnGetMessage += _client2_OnGetMessage;
 
@@ -76,6 +76,11 @@ namespace ClientServerTCP.WinForm
         private void button4_Click(object sender, EventArgs e)
         {
             _client2.InitialClient(textBox4.Text, Int32.Parse(textBox5.Text));
+        }
+
+        private void button5_Click(object sender, EventArgs e)
+        {
+            _server.ShutdownServer();
         }
     }
 }
