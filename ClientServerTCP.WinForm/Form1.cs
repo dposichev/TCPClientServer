@@ -5,6 +5,7 @@ using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -15,6 +16,8 @@ namespace ClientServerTCP.WinForm
         Server _server;
         Client _client2;
 
+        Task _task;
+
         public Form1()
         {
             InitializeComponent();
@@ -23,14 +26,17 @@ namespace ClientServerTCP.WinForm
 
             _server.OnClientConnect += Server_OnClientConnect;
             _server.OnGetMessage += Server_OnGetMessage;
+            _server.OnDisconnectClient += _server_OnDisconnectClient;
 
             _client2 = new Client();
             _client2.OnConnected += _client2_OnConnected;
             _client2.OnGetMessage += _client2_OnGetMessage;
 
-            
+        }
 
-            //Task.Factory.StartNew(InitialServer);
+        private void _server_OnDisconnectClient()
+        {
+            MessageBox.Show("client disconnect");
         }
 
         private void _client2_OnGetMessage(byte[] obj)
@@ -60,7 +66,7 @@ namespace ClientServerTCP.WinForm
 
         private void button1_Click(object sender, EventArgs e)
         {
-            _server.InitialServer(Int32.Parse(textBox1.Text));
+            _server.InitialServer("127.0.0.1", Int32.Parse(textBox1.Text));
         }
 
         private void button2_Click(object sender, EventArgs e)
@@ -81,6 +87,36 @@ namespace ClientServerTCP.WinForm
         private void button5_Click(object sender, EventArgs e)
         {
             _server.ShutdownServer();
+        }
+
+        private void checkBox1_CheckedChanged(object sender, EventArgs e)
+        {
+            var ts = new CancellationTokenSource();
+            CancellationToken ct = ts.Token;
+
+            if (checkBox1.Checked)
+            {
+                _task = new Task(() =>
+                { 
+                    while (true)
+                    {
+                        _client2.SendData(Encoding.ASCII.GetBytes(textBox3.Text));
+                        Thread.Sleep(100);
+                        
+                    } 
+                }, ct);
+
+                _task.Start();
+            }
+            else
+            {
+                ts.Cancel();
+            }
+        }
+
+        private void button6_Click(object sender, EventArgs e)
+        {
+            _client2.Disconnect();
         }
     }
 }
